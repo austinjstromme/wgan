@@ -3,6 +3,7 @@ import time
 import argparse
 import importlib
 import tensorflow as tf
+import numpy as np
 from scipy.misc import imsave
 
 from visualize import *
@@ -87,21 +88,77 @@ class WassersteinGAN(object):
                 #fig = plt.figure(self.data + '.' + self.model)
                 #grid_show(fig, bx, xs.shape)
                 bx = grid_transform(bx, xs.shape)
-                imsave('logs/{}/{}.png'.format(self.data, t/100), bx)
+                #imsave('logs/{}/{}.png'.format(self.data, t/100), bx)
                 #fig.savefig('logs/{}/{}.png'.format(self.data, t/100))
+
+###
+# Returns a lambda expression which samples from a sphere d_l
+#   dimensional sphere embedded in d_a
+###
+def sphere_sampler(d_l, d_a):
+    if d_l >= d_a:
+        raise ValueError("d_l >= d_a")
+
+    def s(n):
+        res = []
+        for i in range(0, n):
+            x = np.random.multivariate_normal(np.zeros(d_l), np.eye(d_l))
+            x = x / np.linalg.norm(x)
+            y = np.zeros(d_a)
+            for k in range(0, d_l):
+                y[k] = x[k]
+            res.append(y)
+        return np.array(res)
+
+    return s
+
+def noise_sampler(d_lg):
+    def s(n):
+        res = []
+        for i in range(0, n):
+            x = np.zeros(d_lg)
+            for k in range(0, d_lg):
+                x[k] = np.random.uniform()
+            res.append(x)
+        return np.array(res)
+
+    return s
+
+def test(d_lg, d_l, d_a, n):
+    d_lg = 3
+    d_l = 2
+    d_a = 5
+    n = 2
+    x_sampler = sphere_sampler(d_l, d_a)
+    ns = noise_sampler(d_lg)
+
+    print("x_sampler(2) = " + str(x_sampler(2)))
+    print("noise_sampler(2) = " + str(ns(2)))
+
 
 
 if __name__ == '__main__':
+    d_lg = 3
+    d_l = 2
+    d_a = 5
+
+    test(d_lg, d_l, d_a, 2)
+
+    print("dimensions: (latent_true, latent_guess, ambient) | (" + 
+        str(d_lg) + ", " + str(d_l) + ", " + str(d_a) + ")")
+
     parser = argparse.ArgumentParser('')
-    parser.add_argument('--data', type=str, default='mnist')
+    #parser.add_argument('--data', type=str, default='mnist')
     parser.add_argument('--model', type=str, default='dcgan')
     parser.add_argument('--gpus', type=str, default='0')
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
-    data = importlib.import_module(args.data)
-    model = importlib.import_module(args.data + '.' + args.model)
-    xs = data.DataSampler()
-    zs = data.NoiseSampler()
+    #data = importlib.import_module(args.data)
+    #model = importlib.import_module(args.data + '.' + args.model)
+    #xs = data.DataSampler()
+    #zs = data.NoiseSampler()
+    xs = sphere_sampler(d_l, d_a)
+    zs = noise_sampler(d_lg)
     d_net = model.Discriminator()
     g_net = model.Generator()
     wgan = WassersteinGAN(g_net, d_net, xs, zs, args.data, args.model)
